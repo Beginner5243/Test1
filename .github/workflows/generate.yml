@@ -64,7 +64,7 @@ jobs:
 
           ATTEMPT=1
           MAX_RETRIES=2
-          until python main.py --episode "$EP" --language "$LANG" --duration "$DUR"; do
+          until PYTHONPATH=. python main.py --episode "$EP" --language "$LANG" --duration "$DUR"; do
             if [ "$ATTEMPT" -ge "$MAX_RETRIES" ]; then
               echo "::error::Auto pipeline failed after $MAX_RETRIES attempts"
               exit 1
