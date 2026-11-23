@@ -1,4 +1,4 @@
-name: CuteVerse Cartoon Pipeline
+name: CuteVerse Auto Reel Pipeline
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ on:
         default: "1"
         type: string
       language:
-        description: "Language code: en, hi, or gu"
+        description: "Language: en, hi, or gu"
         required: true
         default: "en"
         type: choice
@@ -18,19 +18,15 @@ on:
           - hi
           - gu
       duration:
-        description: "Duration in seconds (30, 45, or 90)"
+        description: "Duration in seconds (30 to 60)"
         required: true
         default: "30"
-        type: choice
-        options:
-          - "30"
-          - "45"
-          - "90"
+        type: string
   schedule:
     - cron: "0 6 * * 1,4"
 
 jobs:
-  build-cartoon:
+  build-auto-reel:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -41,48 +37,47 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install FFmpeg, Indic fonts, and dependencies
+      - name: Install FFmpeg, Noto fonts, and dependencies
         run: |
           sudo apt-get update && sudo apt-get install -y \
             ffmpeg \
-            fonts-noto-core \
-            fonts-noto-devanagari \
-            fonts-noto-gujarati
-          fc-cache -f -v
+            fonts-noto \
+            fonts-noto-core || true
+          fc-cache -f -v || true
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run CuteVerse pipeline with retry
-        id: run_pipeline
+      - name: Run Auto Reel pipeline with retry
         run: |
           EP="${{ github.event.inputs.episode || '1' }}"
           LANG="${{ github.event.inputs.language || 'en' }}"
           DUR="${{ github.event.inputs.duration || '30' }}"
+
+          if ! [[ "$EP" =~ ^[0-9]+$ ]] || [ "$EP" -lt 1 ]; then
+            echo "::error::Invalid episode input: $EP"
+            exit 1
+          fi
+          if ! [[ "$DUR" =~ ^[0-9]+$ ]] || [ "$DUR" -lt 30 ] || [ "$DUR" -gt 60 ]; then
+            echo "::error::Duration must be between 30 and 60 seconds, got: $DUR"
+            exit 1
+          fi
+
           ATTEMPT=1
           MAX_RETRIES=2
           until python main.py --episode "$EP" --language "$LANG" --duration "$DUR"; do
             if [ "$ATTEMPT" -ge "$MAX_RETRIES" ]; then
-              echo "::error::CuteVerse pipeline failed after $MAX_RETRIES attempts for ep=$EP lang=$LANG dur=$DUR"
+              echo "::error::Auto pipeline failed after $MAX_RETRIES attempts"
               exit 1
             fi
-            echo "::warning::Attempt $ATTEMPT failed, retrying..."
             ATTEMPT=$((ATTEMPT + 1))
             sleep 5
           done
 
-      - name: Upload episode outputs
+      - name: Upload Auto Reel outputs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: cuteverse-ep-${{ github.event.inputs.episode || '1' }}-${{ github.event.inputs.language || 'en' }}
-          path: |
-            output/videos/
-            output/subtitles/
-            output/thumbnails/
-            output/logs/
-            output/reports/
-            episodes/scripts/
-            episodes/storyboards/
-            assets/characters/
+          name: cuteverse-auto-ep${{ github.event.inputs.episode || '1' }}-${{ github.event.inputs.language || 'en' }}
+          path: output/auto_reels/
           if-no-files-found: warn
           
